@@ -24,10 +24,22 @@ macro_rules! env_vars {
 
 env_vars!(LINK4WSL_PATH, LINK4WSL_DISTRO,);
 
-// "\\wsl.localhost\{DISTRO}\{}"
+fn translate_path(buffer: &mut String, distro: &str, path: &str) {
+    buffer.push_str(r"\\wsl.localhost\");
+    buffer.push_str(distro);
+    buffer.push('\\');
+    for part in path.split_inclusive('/') {
+        if let Some(portion) = part.strip_suffix('/') {
+            buffer.push_str(portion);
+            buffer.push('\\');
+        } else {
+            buffer.push_str(part)
+        }
+    }
+}
 
 fn main() -> ! {
-    let mut arguments = std::env::args_os();
+    let mut arguments = std::env::args();
 
     // Skip program name
     let _ = arguments.next();
@@ -43,13 +55,42 @@ fn main() -> ! {
             .unwrap_or_else(|| fail!("expected LINK.EXE path in {:?}", env::LINK4WSL_PATH)),
     );
 
-    let distro = std::env::var_os(env::LINK4WSL_DISTRO)
-        .unwrap_or_else(|| fail!("expected WSL Distro name in {:?}", env::LINK4WSL_DISTRO));
+    let distro = std::env::var(env::LINK4WSL_DISTRO)
+        .unwrap_or_else(|_| fail!("expected WSL Distro name in {:?}", env::LINK4WSL_DISTRO));
 
-    let cleaned_arguments = arguments; // TODO: Clean up args
+    let mut link = std::process::Command::new(&linker_path);
 
-    let mut link_process = std::process::Command::new(&linker_path)
-        .args(cleaned_arguments)
+    let mut buffer = String::new();
+    for arg in arguments {
+        let mut actual_arg = &arg;
+
+        if let Some(arg_start) = arg.strip_prefix('/') {
+            if arg_start.contains('/') {
+                use std::fmt::Write as _;
+
+                // argument is most likely a path or contains a path
+                buffer.clear();
+
+                // Figure out if its /FLAG:PATH or PATH
+                let path = if let Some(start) = arg_start.find(':') {
+                    let _ = write!(&mut buffer, "/{}", &arg_start[..=start]);
+                    &arg_start[(start + 1)..]
+                } else {
+                    arg_start
+                };
+
+                translate_path(&mut buffer, &distro, path);
+
+                actual_arg = &buffer;
+            }
+        }
+
+        link.arg(actual_arg);
+    }
+
+    dbg!(&link);
+
+    let mut link_process = link
         .spawn()
         .unwrap_or_else(|err| fail!("could not spawn {linker_path:?}: {err}"));
 
