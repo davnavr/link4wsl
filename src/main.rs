@@ -11,6 +11,9 @@ macro_rules! fail {
 fn main() -> ! {
     let mut arguments = std::env::args_os();
 
+    // Skip program name
+    let _ = arguments.next();
+
     let linker_path = PathBuf::from(
         arguments
             .next()
