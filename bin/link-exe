@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-RUSTFLAGS='-C target-cpu=native' cargo run --manifest-path "${BASH_SOURCE[0]}/../../Cargo.toml" --release -- $@
+RUSTFLAGS='-C target-cpu=native' cargo run --manifest-path "${BASH_SOURCE[0]}/../../Cargo.toml" --quiet --release -- $@
