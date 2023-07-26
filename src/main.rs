@@ -22,7 +22,7 @@ macro_rules! env_vars {
     };
 }
 
-env_vars!(LINK4WSL_PATH, LINK4WSL_DISTRO,);
+env_vars!(LINK4WSL_PATH, LINK4WSL_DISTRO, LINK4WSL_LIB_DIRS,);
 
 fn translate_path(buffer: &mut String, distro: &str, path: &str) {
     buffer.push_str(r"\\wsl.localhost\");
@@ -60,6 +60,7 @@ fn main() -> ! {
 
     let mut link = std::process::Command::new(&linker_path);
 
+    // Iterator over all arguments, translating paths if necessary
     let mut buffer = String::new();
     for arg in arguments {
         let mut actual_arg = &arg;
@@ -88,7 +89,19 @@ fn main() -> ! {
         link.arg(actual_arg);
     }
 
-    dbg!(&link);
+    let _ = buffer;
+
+    link.env_clear();
+
+    // Tell LINK.EXE where stuff like kernel32.lib and msvcrt.lib are
+    match std::env::var(env::LINK4WSL_LIB_DIRS) {
+        Ok(lib_directories) => {
+            // Workaround to tell WSL to keep the LIB variable on the Windows side
+            link.env("WSLENV", "LIB/w").env("LIB", lib_directories);
+        }
+        Err(std::env::VarError::NotPresent) => (),
+        Err(std::env::VarError::NotUnicode(_)) => fail!("bad {:?} value", env::LINK4WSL_LIB_DIRS),
+    };
 
     let mut link_process = link
         .spawn()
