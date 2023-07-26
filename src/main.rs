@@ -14,7 +14,17 @@ macro_rules! fail {
     }};
 }
 
-const LINKER_ENV_VAR: &str = "LINK4WSL_PATH";
+macro_rules! env_vars {
+    ($($name:ident,)*) => {
+        mod env {
+            $(pub(super) const $name: &str = stringify!($name);)*
+        }
+    };
+}
+
+env_vars!(LINK4WSL_PATH, LINK4WSL_DISTRO,);
+
+// "\\wsl.localhost\{DISTRO}\{}"
 
 fn main() -> ! {
     let mut arguments = std::env::args_os();
@@ -24,14 +34,17 @@ fn main() -> ! {
 
     if arguments.len() == 0 {
         // LINK.EXE by default lists all arguments with an annoying NEWLINE needed to skip them
-        let _ = write_err_ln!("no arguments passed to LINK.EXE");
+        write_err_ln!("no arguments passed to LINK.EXE");
         std::process::exit(0)
     }
 
     let linker_path = std::path::PathBuf::from(
-        std::env::var_os(LINKER_ENV_VAR)
-            .unwrap_or_else(|| fail!("expected LINK.EXE path in {LINKER_ENV_VAR:?}")),
+        std::env::var_os(env::LINK4WSL_PATH)
+            .unwrap_or_else(|| fail!("expected LINK.EXE path in {:?}", env::LINK4WSL_PATH)),
     );
+
+    let distro = std::env::var_os(env::LINK4WSL_DISTRO)
+        .unwrap_or_else(|| fail!("expected WSL Distro name in {:?}", env::LINK4WSL_DISTRO));
 
     let cleaned_arguments = arguments; // TODO: Clean up args
 
@@ -46,7 +59,7 @@ fn main() -> ! {
         .code()
         .unwrap_or_else(|| fail!("LINK.EXE terminated by signal"));
 
-    let _ = write_err_ln!("exited with code {exit_code}");
+    write_err_ln!("exited with code {exit_code}");
 
     std::process::exit(exit_code)
 }
