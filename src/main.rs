@@ -1,8 +1,15 @@
-use std::{path::PathBuf, io::Write as _};
+//! Entry point for `link4wsl`.
+
+macro_rules! write_err_ln {
+    ($fmt:expr $(, $($arg:tt)*)?) => {{
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), "LINK4WSL : {}", format_args!($fmt $(, $($arg)*)?));
+    }};
+}
 
 macro_rules! fail {
-    ($fmt:expr $(, $($arg:tt)*)?) => {{
-        let _ = writeln!(std::io::stderr(), "LINK4WSL : {}", format_args!($fmt $(, $($arg)*)?));
+    ($($arg:tt)*) => {{
+        write_err_ln!($($arg)*);
         std::process::exit(-1)
     }};
 }
@@ -17,11 +24,11 @@ fn main() -> ! {
 
     if arguments.len() == 0 {
         // LINK.EXE by default lists all arguments with an annoying NEWLINE needed to skip them
-        let _ = writeln!(std::io::stderr(), "LINK4WSL : No arguments passed to LINK.EXE");
+        let _ = write_err_ln!("no arguments passed to LINK.EXE");
         std::process::exit(0)
     }
 
-    let linker_path = PathBuf::from(
+    let linker_path = std::path::PathBuf::from(
         std::env::var_os(LINKER_ENV_VAR)
             .unwrap_or_else(|| fail!("expected LINK.EXE path in {LINKER_ENV_VAR:?}")),
     );
@@ -38,6 +45,8 @@ fn main() -> ! {
         .unwrap_or_else(|err| fail!("LINK.EXE did not exit: {err}"))
         .code()
         .unwrap_or_else(|| fail!("LINK.EXE terminated by signal"));
+
+    let _ = write_err_ln!("exited with code {exit_code}");
 
     std::process::exit(exit_code)
 }
