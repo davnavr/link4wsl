@@ -1,4 +1,7 @@
-//! Entry point for `link4wsl`.
+#![deny(unreachable_pub)]
+#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(clippy::undocumented_unsafe_blocks)]
+#![deny(clippy::cast_possible_truncation)]
 
 macro_rules! write_err_ln {
     ($fmt:expr $(, $($arg:tt)*)?) => {{
