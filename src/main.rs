@@ -56,7 +56,7 @@ fn main() -> ! {
     let linker_path =
         std::path::PathBuf::from(std::env::var_os(env::LINK4WSL_PATH).unwrap_or_else(|| {
             fail!(
-                "expected LINK.EXE path in the {:?} environment variable",
+                "expected linux-style path to LINK.EXE in the {:?} environment variable",
                 env::LINK4WSL_PATH
             )
         }));
@@ -123,7 +123,7 @@ fn main() -> ! {
         .code()
         .unwrap_or_else(|| fail!("LINK.EXE terminated by signal"));
 
-    write_err_ln!("invocation failed (exited with truncated code {exit_code:#02X})");
+    write_err_ln!("linker invocation failed (exited with truncated code {exit_code:#02X})");
 
     if exit_code == 1181 & 0xFF {
         write_err_ln!(
