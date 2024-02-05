@@ -53,13 +53,20 @@ fn main() -> ! {
         std::process::exit(0)
     }
 
-    let linker_path = std::path::PathBuf::from(
-        std::env::var_os(env::LINK4WSL_PATH)
-            .unwrap_or_else(|| fail!("expected LINK.EXE path in {:?}", env::LINK4WSL_PATH)),
-    );
+    let linker_path =
+        std::path::PathBuf::from(std::env::var_os(env::LINK4WSL_PATH).unwrap_or_else(|| {
+            fail!(
+                "expected LINK.EXE path in the {:?} environment variable",
+                env::LINK4WSL_PATH
+            )
+        }));
 
-    let distro = std::env::var(env::LINK4WSL_DISTRO)
-        .unwrap_or_else(|_| fail!("expected WSL Distro name in {:?}", env::LINK4WSL_DISTRO));
+    let distro = std::env::var(env::LINK4WSL_DISTRO).unwrap_or_else(|_| {
+        fail!(
+            "expected WSL Distro name in the {:?} environment variable",
+            env::LINK4WSL_DISTRO
+        )
+    });
 
     let mut link = std::process::Command::new(&linker_path);
 
@@ -116,7 +123,14 @@ fn main() -> ! {
         .code()
         .unwrap_or_else(|| fail!("LINK.EXE terminated by signal"));
 
-    write_err_ln!("exited with code {exit_code}");
+    write_err_ln!("invocation failed (exited with truncated code {exit_code:#02X})");
+
+    if exit_code == 1181 & 0xFF {
+        write_err_ln!(
+            "if libraries could not be found, try adding the contents of the LIB environment variable in your MSVC command prompt to {}",
+            env::LINK4WSL_LIB_DIRS
+        );
+    }
 
     std::process::exit(exit_code)
 }
