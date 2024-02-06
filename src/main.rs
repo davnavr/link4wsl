@@ -44,6 +44,9 @@ fn translate_path(buffer: &mut String, distro: &str, path: &str) {
 }
 
 fn main() -> ! {
+    #[cfg(not(target_os = "linux"))]
+    compile_error!("link4wsl must be built for a Linux environment");
+
     let mut arguments = std::env::args();
 
     // Skip program name
