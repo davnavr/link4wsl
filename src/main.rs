@@ -1,5 +1,5 @@
 #![deny(unreachable_pub)]
-#![deny(unsafe_op_in_unsafe_fn)]
+#![deny(unsafe_code)]
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(clippy::cast_possible_truncation)]
 
@@ -27,6 +27,8 @@ macro_rules! env_vars {
 
 env_vars!(LINK4WSL_PATH, LINK4WSL_DISTRO, LINK4WSL_LIB_DIRS,);
 
+/// Translates a Linux-style `path` into a Windows-style path, and appends it to the given
+/// `buffer`.
 fn translate_path(buffer: &mut String, distro: &str, path: &str) {
     buffer.push_str(r"\\wsl.localhost\");
     buffer.push_str(distro);
@@ -72,6 +74,7 @@ fn main() -> ! {
 
     // Iterator over all arguments, translating paths if necessary
     let mut buffer = String::new();
+    let mut out_file = None;
     for arg in arguments {
         let mut actual_arg = &arg;
 
@@ -83,13 +86,20 @@ fn main() -> ! {
                 buffer.clear();
 
                 // Figure out if its /FLAG:PATH or PATH
-                let path = if let Some(start) = arg_start.find(':') {
-                    let _ = write!(&mut buffer, "/{}", &arg_start[..=start]);
-                    &arg_start[(start + 1)..]
-                } else {
-                    arg_start
+                let (flag, path) = arg_start.split_once(':').unwrap_or(("", arg_start));
+
+                if flag == "OUT" {
+                    // If /OUT is specified, store the path to the resulting EXE to update its Linux
+                    // permissions later.
+                    out_file = Some(Box::<str>::from(path));
+                }
+
+                if !flag.is_empty() {
+                    // Colon separates flag and path
+                    let _ = write!(&mut buffer, "/{}:", flag);
                 };
 
+                // Append the translated path to the buffer
                 translate_path(&mut buffer, &distro, path);
 
                 actual_arg = &buffer;
@@ -100,6 +110,7 @@ fn main() -> ! {
     }
 
     let _ = buffer;
+    let out_file = out_file;
 
     link.env_clear();
 
@@ -123,11 +134,38 @@ fn main() -> ! {
         .code()
         .unwrap_or_else(|| fail!("LINK.EXE terminated by signal"));
 
-    write_err_ln!("linker invocation failed (exited with truncated code {exit_code:#02X})");
+    // TODO: Windows exit code is truncated. Instead, return -1 if anything is written to stderr
+    if exit_code != 0 {
+        write_err_ln!("linker invocation failed (exited with truncated code {exit_code:#02X})");
+    } else if let Some(out_path) = out_file {
+        // TODO: Figure out if a non-zero windows exit code could be truncated to a zero
+
+        // If link was successful, mark any resulting EXE file as executable
+        match std::fs::metadata(&*out_path) {
+            Ok(metadata) => {
+                use std::os::unix::fs::PermissionsExt as _;
+
+                let mut perm = metadata.permissions();
+
+                // Set the executable bits.
+                perm.set_mode(0o777);
+
+                if let Err(err) = std::fs::set_permissions(&*out_path, perm) {
+                    fail!("could not mark output file {out_path:?} as executable: {err}");
+                }
+            }
+            // Link was not successful, don't attempt to mark the file as executable
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => (),
+            Err(err) => fail!("could not obtain permissions for output file {out_path:?}: {err}"),
+        }
+    }
 
     if exit_code == 1181 & 0xFF {
         write_err_ln!(
-            "if libraries could not be found, try adding the contents of the LIB environment variable in your MSVC command prompt to {}",
+            concat!(
+                "if libraries could not be found, try adding the contents of the LIB environment",
+                "variable in your MSVC command prompt to {}"
+            ),
             env::LINK4WSL_LIB_DIRS
         );
     }
